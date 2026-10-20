@@ -1,0 +1,13 @@
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.pytest_cache/
+engine/build-pyinstaller/
+engine/*.egg-info/
+app/src-tauri/target/
+app/src-tauri/gen/
+app/src-tauri/binaries/*
+!app/src-tauri/binaries/.gitkeep
+.env
+*.log

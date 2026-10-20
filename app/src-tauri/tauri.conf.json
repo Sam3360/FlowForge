@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "FlowForge",
+  "version": "0.1.0",
+  "identifier": "dev.flowforge.desktop",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      { "label": "main", "title": "FlowForge", "width": 1440, "height": 900, "minWidth": 1100, "minHeight": 680 }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "FlowForge",
+    "shortDescription": "Local-first visual automation builder",
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
+    "externalBin": ["binaries/flowforge-engine"],
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}

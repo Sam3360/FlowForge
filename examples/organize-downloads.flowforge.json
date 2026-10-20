@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "name": "Organize Downloads",
+  "nodes": [
+    { "id": "start", "type": "start", "config": {}, "position": { "x": 40, "y": 160 } },
+    { "id": "list", "type": "list_files", "config": { "directory": "", "recursive": false, "include": [], "exclude": [], "includeHidden": false, "maxFiles": 10000 }, "position": { "x": 280, "y": 140 } },
+    { "id": "filter", "type": "filter", "config": { "extensions": [".pdf"], "nameContains": "", "minSize": null, "maxSize": null }, "position": { "x": 560, "y": 140 } },
+    { "id": "move", "type": "move_file", "config": { "destination": "", "collision": "rename", "createDestination": true, "dryRun": true }, "position": { "x": 840, "y": 120 } },
+    { "id": "finish", "type": "finish", "config": {}, "position": { "x": 1120, "y": 160 } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "sourcePort": "out", "target": "list", "targetPort": "in" },
+    { "id": "e2", "source": "list", "sourcePort": "files", "target": "filter", "targetPort": "files" },
+    { "id": "e3", "source": "filter", "sourcePort": "matched", "target": "move", "targetPort": "files" },
+    { "id": "e4", "source": "move", "sourcePort": "moved", "target": "finish", "targetPort": "in" }
+  ],
+  "editor": { "viewport": { "x": 0, "y": 0, "zoom": 0.8 } }
+}

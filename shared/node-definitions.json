@@ -1,0 +1,391 @@
+{
+  "nodes": [
+    {
+      "type": "start",
+      "name": "Start",
+      "description": "Entry point. Every workflow has exactly one Start node.",
+      "category": "Flow",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "context",
+          "label": "Context",
+          "required": true
+        }
+      ],
+      "config": [],
+      "sideEffects": false,
+      "requiresConfirmation": false
+    },
+    {
+      "type": "list_files",
+      "name": "List Files",
+      "description": "Lists files in a folder. Directory symlinks are never followed.",
+      "category": "Files",
+      "inputs": [
+        {
+          "name": "in",
+          "type": "context",
+          "label": "Trigger",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "files",
+          "type": "files",
+          "label": "Files",
+          "required": true
+        }
+      ],
+      "config": [
+        {
+          "name": "directory",
+          "label": "Directory",
+          "type": "path",
+          "default": null,
+          "required": true,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": "directory"
+        },
+        {
+          "name": "recursive",
+          "label": "Include subfolders",
+          "type": "boolean",
+          "default": false,
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "include",
+          "label": "Include patterns",
+          "type": "stringList",
+          "default": [],
+          "required": false,
+          "description": "Glob patterns on the file name. Empty means all files.",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "*.pdf",
+          "pathKind": null
+        },
+        {
+          "name": "exclude",
+          "label": "Exclude patterns",
+          "type": "stringList",
+          "default": [],
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "*.tmp",
+          "pathKind": null
+        },
+        {
+          "name": "includeHidden",
+          "label": "Include hidden files",
+          "type": "boolean",
+          "default": false,
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "maxFiles",
+          "label": "Max files",
+          "type": "integer",
+          "default": 10000,
+          "required": false,
+          "description": "The node fails rather than silently truncating.",
+          "options": [],
+          "minimum": 1,
+          "maximum": 1000000,
+          "placeholder": "",
+          "pathKind": null
+        }
+      ],
+      "sideEffects": false,
+      "requiresConfirmation": false
+    },
+    {
+      "type": "filter",
+      "name": "Filter",
+      "description": "Splits a file list by extension, name and size. An empty result is not an error.",
+      "category": "Files",
+      "inputs": [
+        {
+          "name": "files",
+          "type": "files",
+          "label": "Files",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "matched",
+          "type": "files",
+          "label": "Matched",
+          "required": true
+        },
+        {
+          "name": "rejected",
+          "type": "files",
+          "label": "Rejected",
+          "required": true
+        }
+      ],
+      "config": [
+        {
+          "name": "extensions",
+          "label": "Extensions",
+          "type": "stringList",
+          "default": [],
+          "required": false,
+          "description": "Case-insensitive; the leading dot is optional. Empty means any.",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": ".pdf",
+          "pathKind": null
+        },
+        {
+          "name": "nameContains",
+          "label": "Name contains",
+          "type": "string",
+          "default": "",
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "minSize",
+          "label": "Min size (bytes)",
+          "type": "number",
+          "default": null,
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": 0,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "maxSize",
+          "label": "Max size (bytes)",
+          "type": "number",
+          "default": null,
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": 0,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        }
+      ],
+      "sideEffects": false,
+      "requiresConfirmation": false
+    },
+    {
+      "type": "condition",
+      "name": "Condition",
+      "description": "Routes a file list down the true or false branch. Compares the file count or total size; no expressions.",
+      "category": "Flow",
+      "inputs": [
+        {
+          "name": "files",
+          "type": "files",
+          "label": "Files",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "true",
+          "type": "files",
+          "label": "True",
+          "required": true
+        },
+        {
+          "name": "false",
+          "type": "files",
+          "label": "False",
+          "required": true
+        }
+      ],
+      "config": [
+        {
+          "name": "subject",
+          "label": "Compare",
+          "type": "enum",
+          "default": "count",
+          "required": false,
+          "description": "",
+          "options": [
+            "count",
+            "totalSize"
+          ],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "operator",
+          "label": "Operator",
+          "type": "enum",
+          "default": "gt",
+          "required": false,
+          "description": "",
+          "options": [
+            "eq",
+            "ne",
+            "gt",
+            "gte",
+            "lt",
+            "lte"
+          ],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "value",
+          "label": "Value",
+          "type": "number",
+          "default": 0,
+          "required": true,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        }
+      ],
+      "sideEffects": false,
+      "requiresConfirmation": false
+    },
+    {
+      "type": "move_file",
+      "name": "Move File",
+      "description": "Moves files into a destination folder. Previews by default and never overwrites existing files.",
+      "category": "Files",
+      "inputs": [
+        {
+          "name": "files",
+          "type": "files",
+          "label": "Files",
+          "required": true
+        }
+      ],
+      "outputs": [
+        {
+          "name": "moved",
+          "type": "moves",
+          "label": "Results",
+          "required": true
+        }
+      ],
+      "config": [
+        {
+          "name": "destination",
+          "label": "Destination folder",
+          "type": "path",
+          "default": null,
+          "required": true,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": "directory"
+        },
+        {
+          "name": "collision",
+          "label": "If a file already exists",
+          "type": "enum",
+          "default": "fail",
+          "required": false,
+          "description": "fail: stop before moving anything; skip: leave it; rename: add ' (1)'.",
+          "options": [
+            "fail",
+            "skip",
+            "rename"
+          ],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "createDestination",
+          "label": "Create destination if missing",
+          "type": "boolean",
+          "default": false,
+          "required": false,
+          "description": "",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        },
+        {
+          "name": "dryRun",
+          "label": "Preview only (dry run)",
+          "type": "boolean",
+          "default": true,
+          "required": false,
+          "description": "When off, a run needs your explicit confirmation before files are moved.",
+          "options": [],
+          "minimum": null,
+          "maximum": null,
+          "placeholder": "",
+          "pathKind": null
+        }
+      ],
+      "sideEffects": true,
+      "requiresConfirmation": true
+    },
+    {
+      "type": "finish",
+      "name": "Finish",
+      "description": "Ends a workflow branch successfully and reports a summary of what it received.",
+      "category": "Flow",
+      "inputs": [
+        {
+          "name": "in",
+          "type": "any",
+          "label": "Input",
+          "required": true
+        }
+      ],
+      "outputs": [],
+      "config": [],
+      "sideEffects": false,
+      "requiresConfirmation": false
+    }
+  ]
+}
