@@ -13,10 +13,11 @@ export function FlowNode({ id, data, selected }: NodeProps<ForgeNode>) {
   if (!def) return <div className="node node--unknown">Unknown node: {data.nodeType}</div>;
   const rs = run.nodes[id];
   const nodeIssues = issues.filter((i) => i.nodeId === id && i.severity === "error");
+  const nodeWarnings = issues.filter((i) => i.nodeId === id && i.severity === "warning");
   const Icon = nodeIcon(def.type);
   const taken = rs?.activePorts;
   return (
-    <div className={`node ${selected ? "is-selected" : ""} ${nodeIssues.length ? "has-issue" : ""}`} data-status={rs?.status ?? "idle"}
+    <div className={`node ${selected ? "is-selected" : ""} ${nodeIssues.length ? "has-issue" : nodeWarnings.length ? "has-warning" : ""}`} data-status={rs?.status ?? "idle"}
          style={{ ["--accent" as string]: categoryColor(def.category) }} data-testid={`node-${id}`}>
       <div className="node__header">
         <Icon size={14} /> <span className="node__title">{def.name}</span>
@@ -45,6 +46,7 @@ export function FlowNode({ id, data, selected }: NodeProps<ForgeNode>) {
       </div>
       <div className="node__footer">
         {nodeIssues.length > 0 && <span className="node__issue" title={nodeIssues.map((i) => i.message).join("\n")}><AlertTriangle size={12} /> {nodeIssues.length}</span>}
+        {nodeWarnings.length > 0 && <span className="node__warn" title={nodeWarnings.map((i) => i.message).join("\n")}><AlertTriangle size={12} /> {nodeWarnings.length}</span>}
         {def.sideEffects && <span className="node__tag">{data.config["dryRun"] === false ? "changes files" : "preview"}</span>}
         <span className="node__time">{fmtMs(rs?.durationMs)}</span>
       </div>

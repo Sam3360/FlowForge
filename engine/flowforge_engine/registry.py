@@ -36,13 +36,14 @@ class ConfigField:
     maximum: float | None = None
     placeholder: str = ""
     path_kind: str | None = None  # "directory" | "file" for type == "path"
+    must_exist: bool = False      # path must exist before the run (checked in preflight)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name, "label": self.label, "type": self.type, "default": self.default,
             "required": self.required, "description": self.description, "options": list(self.options),
             "minimum": self.minimum, "maximum": self.maximum, "placeholder": self.placeholder,
-            "pathKind": self.path_kind,
+            "pathKind": self.path_kind, "mustExist": self.must_exist,
         }
 
 

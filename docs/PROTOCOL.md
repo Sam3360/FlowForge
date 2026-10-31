@@ -16,7 +16,7 @@ Responses: `{"type":"response","id":..,"ok":true,"result":{..}}` or `{"ok":false
 
 `options`: `allowedRoots: string[]` (folders the run may touch), `dryRun: bool` (force every side-effecting node to preview), `approvedNodes: string[]` (ids of nodes confirmed to apply changes).
 
-Issue: `{severity, code, message, nodeId, edgeId, field}`.
+Issue: `{severity, code, message, nodeId, edgeId, field, hint}`. Errors are `{code, message, details, hint}`; `hint` (nullable) tells the user what to check. Node definitions gain `mustExist` on path fields (v0.2.0; additive, protocol version unchanged). Events carry a per-run increasing `seq`; clients should ignore events whose `seq` is not greater than the last one seen and events for other runs.
 
 ## Events
 

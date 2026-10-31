@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import SUPPORTED_SCHEMA_VERSIONS
+from .errors import hint_for
 from .registry import Registry, resolve_config, types_compatible
 
 ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -23,7 +24,7 @@ class Issue:
 
     def to_dict(self) -> dict[str, Any]:
         return {"severity": self.severity, "code": self.code, "message": self.message,
-                "nodeId": self.node_id, "edgeId": self.edge_id, "field": self.field}
+                "nodeId": self.node_id, "edgeId": self.edge_id, "field": self.field, "hint": hint_for(self.code)}
 
 
 @dataclass
@@ -192,7 +193,13 @@ def validate_workflow(wf: Workflow, reg: Registry) -> tuple[list[Issue], dict[st
         issues.append(Issue("error", "GRAPH_CYCLE", "The workflow contains a cycle; loops are not supported yet"))
     if starts and not cyclic:
         reach = reachable_from(wf, starts[:1])
+        has_outgoing = {e.source for e in wf.edges}
+        if not any(n.type == "finish" for n in wf.nodes.values()):
+            issues.append(Issue("warning", "FINISH_MISSING", "The workflow has no Finish node, so no completion summary is reported"))
         for n in wf.nodes.values():
+            d = reg.get(n.type)
             if n.id not in reach and n.type != "start":
                 issues.append(Issue("warning", "NODE_UNREACHABLE", "Not reachable from Start; this node will be skipped", node_id=n.id))
+            elif d is not None and d.outputs and n.id not in has_outgoing:
+                issues.append(Issue("warning", "NODE_DEAD_END", f"'{d.name}' has no outgoing connection; its results go nowhere", node_id=n.id))
     return issues, configs

@@ -105,3 +105,27 @@ def test_editor_metadata_is_ignored(tmp_path):
     raw = organize(tmp_path, tmp_path)
     raw["editor"] = {"viewport": {"x": 1, "y": 2, "zoom": 1}}
     assert codes(raw)[0] == set()
+
+
+def test_issues_carry_hints_and_warnings_do_not_block(tmp_path):
+    raw = organize(tmp_path, tmp_path)
+    raw["nodes"] = [n for n in raw["nodes"] if n["id"] != "e"]
+    raw["edges"] = [e for e in raw["edges"] if e["target"] != "e"]
+    _, issues, _ = check_workflow(raw, REG)
+    assert not has_errors(issues)                       # a workflow without Finish is still valid
+    warn = {i.code: i for i in issues if i.severity == "warning"}
+    assert set(warn) == {"FINISH_MISSING", "NODE_DEAD_END"} and warn["NODE_DEAD_END"].node_id == "m"
+    assert all(i.to_dict()["hint"] for i in issues)
+
+
+def test_condition_with_one_branch_connected_is_not_a_dead_end(tmp_path):
+    raw = wf([node("s", "start"), node("l", "list_files", directory=str(tmp_path)), node("c", "condition", value=1), node("e", "finish")],
+             [edge("s", "out", "l", "in"), edge("l", "files", "c", "files"), edge("c", "true", "e", "in")])
+    _, issues, _ = check_workflow(raw, REG)
+    assert issues == []
+
+
+def test_errors_have_hints_for_every_code_used():
+    from flowforge_engine.errors import HINTS
+    _, issues = codes(wf([node("a", "start"), node("b", "start"), node("x", "nope"), node("f", "filter")], [edge("a", "out", "ghost", "in")]))
+    assert issues and all(i.code in HINTS for i in issues)

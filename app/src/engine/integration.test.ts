@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { NodeProcessTransport } from "../test/nodeTransport";
 import { EngineClient, EngineRequestError } from "./client";
 import { initialRun, runReducer, type EngineEvent, type RunState } from "../model/runState";
+import { recordFromRun } from "../model/runHistory";
 import { addNode, connect, emptyDoc, toWorkflowFile, updateConfig, getType, type Doc } from "../model/editor";
 
 const python = process.env["FLOWFORGE_PYTHON"] ?? "python3";
@@ -65,17 +66,62 @@ d("TS client against the real engine", () => {
     await client.shutdown();
   });
 
-  it("surfaces a failing node as structured state", async () => {
+  it("a missing source folder is rejected before running, with node, field and hint", async () => {
     const client = new EngineClient(new NodeProcessTransport());
     await client.start();
     const doc = organize(path.join(tmp, "does-not-exist"), dest, true);
-    const s = await runAndWait(client, { workflow: toWorkflowFile(doc), options: { allowedRoots: [tmp] } });
-    expect(s.status).toBe("failed");
-    const failed = Object.values(s.nodes).find((n) => n.status === "failed")!;
-    expect(failed.error!.code).toBe("PATH_NOT_FOUND");
-    expect(Object.values(s.nodes).filter((n) => n.status === "skipped")).toHaveLength(3);
+    const err = await client.request("run", { workflow: toWorkflowFile(doc), options: { allowedRoots: [tmp] } }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(EngineRequestError);
+    const issues = (err as EngineRequestError).details["issues"] as { code: string; nodeId: string; field: string; hint: string }[];
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ code: "PATH_NOT_FOUND", field: "directory" });
+    expect(issues[0]!.hint).toBeTruthy();
+    expect(JSON.stringify(issues)).not.toContain(tmp);   // no full absolute path in messages
     await client.shutdown();
   });
+
+  it("a node failure during the run becomes structured state with a hint, and later nodes are skipped", async () => {
+    const client = new EngineClient(new NodeProcessTransport());
+    await client.start();
+    const s2 = path.join(tmp, "src2"), d2 = path.join(tmp, "dest2");
+    fs.mkdirSync(s2); fs.mkdirSync(d2);
+    fs.writeFileSync(path.join(s2, "a.txt"), "new"); fs.writeFileSync(path.join(d2, "a.txt"), "existing");
+    const doc = organize(s2, d2, false);   // collision policy defaults to "fail"
+    const moveId = doc.nodes.find((n) => getType(n) === "move_file")!.id;
+    const s = await runAndWait(client, { workflow: toWorkflowFile(doc), options: { allowedRoots: [tmp], approvedNodes: [moveId] } });
+    expect(s.status).toBe("failed");
+    const failed = s.nodes[moveId]!;
+    expect(failed.error).toMatchObject({ code: "NAME_COLLISION" });
+    expect(failed.error!.hint).toMatch(/skip or rename/);
+    expect(Object.values(s.nodes).filter((n) => n.status === "skipped")).toHaveLength(1);
+    expect(fs.readFileSync(path.join(d2, "a.txt"), "utf8")).toBe("existing");   // never overwritten
+    expect(fs.readFileSync(path.join(s2, "a.txt"), "utf8")).toBe("new");
+    await client.shutdown();
+  });
+
+  it("cancelling a long move leaves a consistent, recordable state and loses no files", async () => {
+    const client = new EngineClient(new NodeProcessTransport());
+    await client.start();
+    const s3 = path.join(tmp, "src3"), d3 = path.join(tmp, "dest3");
+    fs.mkdirSync(s3); fs.mkdirSync(d3);
+    for (let i = 0; i < 4000; i++) fs.writeFileSync(path.join(s3, `f${i}.txt`), "");
+    const doc = organize(s3, d3, false);
+    const moveId = doc.nodes.find((n) => getType(n) === "move_file")!.id;
+    let state = runReducer(initialRun(), { type: "begin", mode: "apply" });
+    const done = new Promise<void>((res) => client.onEvent((e: EngineEvent) => {
+      state = runReducer(state, { type: "event", event: e });
+      if (e.event === "node_started" && e.nodeId === moveId) void client.request("cancel");
+      if (e.event === "run_completed" || e.event === "run_cancelled") res();
+    }));
+    await client.request("run", { workflow: toWorkflowFile(doc), options: { allowedRoots: [tmp], approvedNodes: [moveId] } });
+    await done;
+    expect(["cancelled", "success"]).toContain(state.status);   // success only if the move finished before cancel arrived
+    expect(fs.readdirSync(s3).length + fs.readdirSync(d3).length).toBe(4000);
+    const rec = recordFromRun(state, {}, "w", 1)!;
+    expect(rec.status).toBe(state.status);
+    if (state.status === "cancelled") expect(state.nodes[moveId]!.status).toBe("cancelled");
+    await client.shutdown();
+  }, 30000);
 
   it("rejects requests with EngineRequestError when the engine process dies", async () => {
     const t = new NodeProcessTransport();

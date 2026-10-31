@@ -1,7 +1,7 @@
 /** Pure editing operations on the editor document. No React, no DOM. */
 import type { Edge, Node } from "@xyflow/react";
 import { defaultConfig, getDef, typesCompatible } from "./definitions";
-import type { Config, Issue, Position, WorkflowFile } from "./types";
+import type { Config, ConfigFieldDef, Issue, NodeDef, Position, WorkflowFile } from "./types";
 
 export type ForgeNodeData = { config: Config; nodeType: string; [key: string]: unknown };
 export type ForgeNode = Node<ForgeNodeData, "forge">;
@@ -45,17 +45,31 @@ export function deleteEdges(doc: Doc, ids: string[]): Doc {
   return { ...doc, edges: doc.edges.filter((e) => !gone.has(e.id)) };
 }
 
-export function duplicateNodes(doc: Doc, ids: string[]): Doc {
-  const taken = new Set(doc.nodes.map((n) => n.id));
+/**
+ * Duplicates nodes (never Start). Configuration is deep-copied. Connections *between* duplicated nodes are
+ * recreated between the copies; connections to nodes outside the selection are NOT copied, because an input
+ * accepts only one connection and the copy would otherwise steal or duplicate an existing one.
+ */
+export function duplicateNodesWithIds(doc: Doc, ids: string[]): { doc: Doc; newIds: string[] } {
+  const taken = new Set([...doc.nodes.map((n) => n.id), ...doc.edges.map((e) => e.id)]);
+  const map = new Map<string, string>();
   const copies: ForgeNode[] = [];
   for (const n of doc.nodes.filter((n) => ids.includes(n.id) && getType(n) !== "start")) {
     const id = newId(getType(n), taken);
     taken.add(id);
-    copies.push({ ...n, id, selected: false, position: { x: n.position.x + 40, y: n.position.y + 40 },
+    map.set(n.id, id);
+    copies.push({ ...n, id, selected: true, position: { x: n.position.x + 40, y: n.position.y + 40 },
       data: { ...n.data, config: structuredClone(n.data.config) } });
   }
-  return { ...doc, nodes: [...doc.nodes, ...copies] };
+  const edges: ForgeEdge[] = [];
+  for (const e of doc.edges) {
+    const s = map.get(e.source), t = map.get(e.target);
+    if (s && t) { const id = newId("edge", taken); taken.add(id); edges.push({ id, source: s, sourceHandle: e.sourceHandle, target: t, targetHandle: e.targetHandle }); }
+  }
+  if (copies.length === 0) return { doc, newIds: [] };
+  return { doc: { ...doc, nodes: [...doc.nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), ...copies], edges: [...doc.edges, ...edges] }, newIds: copies.map((c) => c.id) };
 }
+export const duplicateNodes = (doc: Doc, ids: string[]): Doc => duplicateNodesWithIds(doc, ids).doc;
 
 export function updateConfig(doc: Doc, id: string, field: string, value: unknown): Doc {
   return { ...doc, nodes: doc.nodes.map((n) => (n.id === id ? { ...n, data: { ...n.data, config: { ...n.data.config, [field]: value } } } : n)) };
@@ -130,7 +144,36 @@ export function serialize(doc: Doc, viewport?: Viewport): string {
   return JSON.stringify(toWorkflowFile(doc, viewport), null, 2) + "\n";
 }
 
-export type ParseResult = { ok: true; doc: Doc; viewport?: Viewport } | { ok: false; message: string };
+export type ParseResult = { ok: true; doc: Doc; viewport?: Viewport; warnings: string[] } | { ok: false; message: string };
+
+function validValue(f: ConfigFieldDef, v: unknown): boolean {
+  // null means "not set yet" and is what the app itself saves for unset required settings; the engine reports it.
+  if (v === null && (f.required || f.default === null) && f.type !== "boolean" && f.type !== "stringList") return true;
+  switch (f.type) {
+    case "string": case "path": return typeof v === "string";
+    case "boolean": return typeof v === "boolean";
+    case "number": case "integer": return (typeof v === "number" && Number.isFinite(v) && (f.type === "number" || Number.isInteger(v))) || (v === null && !f.required);
+    case "enum": return typeof v === "string" && f.options.includes(v);
+    case "stringList": return Array.isArray(v) && v.every((i) => typeof i === "string");
+  }
+}
+
+/** Untrusted file -> safe editor config. Anything of the wrong type is reset to the default and reported. */
+export function coerceConfig(def: NodeDef, raw: unknown): { config: Config; notes: string[] } {
+  const src = typeof raw === "object" && raw !== null && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+  const defaults = defaultConfig(def);
+  const config: Config = {};
+  const notes: string[] = [];
+  if (raw !== undefined && src !== raw) notes.push(`${def.name}: settings were not an object and were reset`);
+  for (const f of def.config) {
+    if (!(f.name in src)) { config[f.name] = defaults[f.name]; continue; }
+    if (validValue(f, src[f.name])) config[f.name] = src[f.name];
+    else { config[f.name] = defaults[f.name]; notes.push(`${def.name}: invalid "${f.label}" was reset to its default`); }
+  }
+  const known = new Set(def.config.map((f) => f.name));
+  for (const k of Object.keys(src)) if (!known.has(k)) notes.push(`${def.name}: unknown setting "${k.slice(0, 40)}" was ignored`);
+  return { config, notes };
+}
 
 export function parseWorkflowText(text: string): ParseResult {
   let raw: unknown;
@@ -143,16 +186,28 @@ export function parseWorkflowText(text: string): ParseResult {
   if (unknown.length) return { ok: false, message: `This workflow uses node types this app does not know: ${unknown.join(", ")}.` };
   const ids = new Set<string>();
   const nodes: ForgeNode[] = [];
+  const warnings: string[] = [];
   for (const n of w.nodes) {
     if (typeof n?.id !== "string" || ids.has(n.id)) return { ok: false, message: "The workflow has a missing or duplicate node id." };
     ids.add(n.id);
     const def = getDef(n.type)!;
-    nodes.push({ id: n.id, type: "forge", position: { x: Number(n.position?.x) || 0, y: Number(n.position?.y) || 0 },
-      data: { nodeType: n.type, config: { ...defaultConfig(def), ...(typeof n.config === "object" && n.config ? n.config : {}) } } });
+    const { config, notes: n2 } = coerceConfig(def, n.config);
+    warnings.push(...n2);
+    nodes.push({ id: n.id, type: "forge", position: { x: Number(n.position?.x) || 0, y: Number(n.position?.y) || 0 }, data: { nodeType: n.type, config } });
   }
-  const edges: ForgeEdge[] = w.edges.filter((e) => ids.has(e?.source) && ids.has(e?.target))
-    .map((e) => ({ id: String(e.id), source: e.source, sourceHandle: e.sourcePort, target: e.target, targetHandle: e.targetPort }));
-  const result: ParseResult = { ok: true, doc: { name: typeof w.name === "string" ? w.name : "Untitled workflow", nodes, edges } };
+  const typeOf = new Map(nodes.map((n) => [n.id, getType(n)]));
+  const edges: ForgeEdge[] = [];
+  const edgeIds = new Set<string>();
+  let dropped = 0;
+  for (const e of w.edges) {
+    const sd = getDef(typeOf.get(String(e?.source)) ?? ""), td = getDef(typeOf.get(String(e?.target)) ?? "");
+    const ok = typeof e?.id === "string" && !edgeIds.has(e.id) && sd?.outputs.some((p) => p.name === e.sourcePort) && td?.inputs.some((p) => p.name === e.targetPort);
+    if (!ok) { dropped += 1; continue; }
+    edgeIds.add(e.id);
+    edges.push({ id: e.id, source: e.source, sourceHandle: e.sourcePort, target: e.target, targetHandle: e.targetPort });
+  }
+  if (dropped) warnings.push(`${dropped} invalid or duplicate connection(s) were dropped`);
+  const result: ParseResult = { ok: true, warnings, doc: { name: typeof w.name === "string" ? w.name.slice(0, 200) : "Untitled workflow", nodes, edges } };
   if (w.editor?.viewport) result.viewport = w.editor.viewport;
   return result;
 }

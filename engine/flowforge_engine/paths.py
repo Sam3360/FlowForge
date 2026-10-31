@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import os
 
-from .errors import EngineError
+from .errors import EngineError, short_path
 
 
 def _norm(p: str) -> str:
@@ -33,13 +33,13 @@ class PathPolicy:
         if not isinstance(path, str) or not path or "\x00" in path:
             raise EngineError("PATH_INVALID", "Path is empty or contains invalid characters")
         if not os.path.isabs(path):
-            raise EngineError("PATH_NOT_ABSOLUTE", f"Path must be absolute: {path}")
+            raise EngineError("PATH_NOT_ABSOLUTE", f"Path must be absolute: {short_path(path)}")
         real = os.path.realpath(path)
         if not self.contains(real):
             raise EngineError(
                 "PATH_NOT_ALLOWED",
-                f"Path is outside the folders you approved for this run: {path}",
-                {"path": path, "resolved": real},
+                f"Path is outside the folders you approved for this run: {short_path(path)}",
+                {"path": short_path(path)},
             )
         return real
 
@@ -49,12 +49,12 @@ def validate_roots(roots: list[str]) -> list[str]:
     problems = []
     for r in roots:
         if not isinstance(r, str) or not os.path.isabs(r):
-            problems.append(f"Approved folder must be an absolute path: {r!r}")
+            problems.append("Approved folder must be an absolute path")
         elif os.path.dirname(os.path.normpath(r)) == os.path.normpath(r):
-            problems.append(f"Approving a whole drive or filesystem root is not allowed: {r}")
+            problems.append("Approving a whole drive or filesystem root is not allowed")
         elif not os.path.isdir(r):
             # A folder that will be created by the run (e.g. a new destination) may be approved,
             # but only if its parent exists, so at most one new folder can appear.
             if os.path.exists(r) or not os.path.isdir(os.path.dirname(os.path.normpath(r))):
-                problems.append(f"Approved folder does not exist: {r}")
+                problems.append(f"Approved folder does not exist: {short_path(r)}")
     return problems

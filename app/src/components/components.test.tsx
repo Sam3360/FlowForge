@@ -64,11 +64,13 @@ describe("execution inspector", () => {
   it("execution panel lists nodes, selects on click, and surfaces cancellation honestly", async () => {
     const u = userEvent.setup(); const onSelect = vi.fn();
     let run = runReducer(initialRun(), { type: "begin", mode: "apply" });
-    for (const e of [{ event: "run_started", order: ["a", "b"] }, { event: "node_completed", nodeId: "a", durationMs: 5 }, { event: "node_cancelled", nodeId: "b", message: "x" }, { event: "run_cancelled", status: "cancelled" }])
+    for (const e of [{ event: "run_started", order: ["a", "b"], seq: 1 }, { event: "node_completed", nodeId: "a", durationMs: 5, seq: 2 }, { event: "node_cancelled", nodeId: "b", message: "x", seq: 3 }, { event: "run_cancelled", status: "cancelled", seq: 4 }])
       run = runReducer(run, { type: "event", event: { type: "event", runId: "r", ...e } });
-    render(<ExecutionPanel run={run} names={{ a: "start", b: "move_file" }} selectedId={null} collapsed={false} height={240} onToggle={() => undefined} onSelect={onSelect} onResize={() => undefined} />);
+    render(<ExecutionPanel run={run} live={run} nodeInfo={{ a: { name: "Start", type: "start" }, b: { name: "Move File", type: "move_file" } }} selectedId={null} collapsed={false} height={240}
+      tab="nodes" validating={false} issues={[]} records={[]} viewing={null} onTab={() => undefined} onToggle={() => undefined} onSelect={onSelect} onResize={() => undefined}
+      onGoToIssue={() => undefined} onClearIssues={() => undefined} onView={() => undefined} />);
     expect(screen.getByTestId("run-status")).toHaveTextContent("cancelled");
-    expect(screen.getByText(/not undone/)).toBeInTheDocument();
+    expect(screen.getByTestId("cancel-summary")).toHaveTextContent(/while “Move File” was running.*not undone/);
     await u.click(screen.getByText("Move File"));
     expect(onSelect).toHaveBeenCalledWith("b");
   });

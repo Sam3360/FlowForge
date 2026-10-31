@@ -4,7 +4,7 @@ export type FieldType = "string" | "path" | "boolean" | "number" | "integer" | "
 export interface PortDef { name: string; type: PortType; label: string; required: boolean }
 export interface ConfigFieldDef {
   name: string; label: string; type: FieldType; default: unknown; required: boolean; description: string;
-  options: string[]; minimum: number | null; maximum: number | null; placeholder: string; pathKind: string | null;
+  options: string[]; minimum: number | null; maximum: number | null; placeholder: string; pathKind: string | null; mustExist?: boolean;
 }
 export interface NodeDef {
   type: string; name: string; description: string; category: string;
@@ -26,5 +26,5 @@ export interface WorkflowFile {
 
 export interface Issue {
   severity: "error" | "warning"; code: string; message: string;
-  nodeId: string | null; edgeId: string | null; field: string | null;
+  nodeId: string | null; edgeId: string | null; field: string | null; hint?: string | null;
 }

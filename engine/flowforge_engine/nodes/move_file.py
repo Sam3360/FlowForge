@@ -4,7 +4,7 @@ import os
 import shutil
 
 from ..context import NodeContext, NodeOutput
-from ..errors import CancelledError, EngineError
+from ..errors import CancelledError, EngineError, short_path
 from ..registry import ConfigField, NodeDefinition, PortDef
 
 
@@ -94,10 +94,10 @@ def execute(ctx: NodeContext, config: dict, inputs: dict) -> NodeOutput:
     dest = ctx.policy.resolve(config["destination"])
     dry = ctx.effective_dry_run(config["dryRun"])
     if os.path.exists(dest) and not os.path.isdir(dest):
-        raise EngineError("NOT_A_DIRECTORY", f"Destination is not a folder: {config['destination']}")
+        raise EngineError("NOT_A_DIRECTORY", f"Destination is not a folder: {short_path(config['destination'])}")
     will_create = not os.path.exists(dest)
     if will_create and not config["createDestination"]:
-        raise EngineError("PATH_NOT_FOUND", f"Destination folder does not exist: {config['destination']} "
+        raise EngineError("PATH_NOT_FOUND", f"Destination folder does not exist: {short_path(config['destination'])} "
                           "(enable 'Create destination' to create it)")
 
     plan = build_plan(ctx, files, dest, config["collision"])

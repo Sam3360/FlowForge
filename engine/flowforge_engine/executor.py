@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable
 
 from .context import NodeContext, NodeOutput, RunOptions
-from .errors import CancelledError, EngineError
+from .errors import CancelledError, EngineError, hint_for, short_path
 from .paths import PathPolicy, validate_roots
 from .preview import preview, preview_map
 from .registry import Registry
@@ -49,9 +49,14 @@ def preflight(wf: Workflow, configs: dict[str, dict[str, Any]], reg: Registry, o
             val = configs[n.id].get(f.name)
             if f.type == "path" and isinstance(val, str) and val:
                 try:
-                    policy.resolve(val)
+                    real = policy.resolve(val)
                 except EngineError as e:
                     issues.append(Issue("error", e.code, e.message, node_id=n.id, field=f.name))
+                    continue
+                if f.must_exist and not os.path.exists(real):
+                    issues.append(Issue("error", "PATH_NOT_FOUND", f"{f.label} does not exist: {short_path(val)}", node_id=n.id, field=f.name))
+                elif f.must_exist and f.path_kind == "directory" and not os.path.isdir(real):
+                    issues.append(Issue("error", "NOT_A_DIRECTORY", f"{f.label} is not a folder: {short_path(val)}", node_id=n.id, field=f.name))
         if d.side_effects and d.requires_confirmation and not options.dry_run:
             cfg = configs[n.id]
             if cfg.get("dryRun") is False and n.id not in options.approved_nodes:
@@ -142,7 +147,7 @@ class Run:
                 status[nid] = "failed"
                 aborted_by, run_status = nid, "failed"
                 self.emit("node_failed", nodeId=nid, durationMs=ms,
-                          error={"code": e.code, "message": e.message, "details": preview(e.details)["preview"]})
+                          error={"code": e.code, "message": e.message, "details": preview(e.details)["preview"], "hint": hint_for(e.code)})
             except Exception as e:  # noqa: BLE001 - node bugs must not kill the engine
                 ms = round((time.perf_counter() - t0) * 1000, 2)
                 durations[nid] = ms
@@ -150,7 +155,8 @@ class Run:
                 aborted_by, run_status = nid, "failed"
                 traceback.print_exc(file=sys.stderr)
                 self.emit("node_failed", nodeId=nid, durationMs=ms,
-                          error={"code": "NODE_INTERNAL_ERROR", "message": f"{type(e).__name__}: {str(e)[:500]}", "details": {}})
+                          error={"code": "NODE_INTERNAL_ERROR", "message": f"{type(e).__name__}: {str(e)[:500]}", "details": {},
+                                 "hint": hint_for("NODE_INTERNAL_ERROR")})
 
         counts: dict[str, int] = {}
         for s in status.values():

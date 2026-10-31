@@ -9,7 +9,7 @@ from typing import Any, BinaryIO
 
 from . import ENGINE_VERSION, MAX_MESSAGE_BYTES, PROTOCOL_VERSION, SUPPORTED_SCHEMA_VERSIONS
 from .context import RunOptions
-from .errors import EngineError
+from .errors import EngineError, hint_for
 from .executor import Run, check_workflow, preflight
 from .nodes import build_registry
 from .workflow import has_errors
@@ -32,15 +32,19 @@ class Server:
             msg = {"type": "event", "event": "log", "runId": msg.get("runId"), "level": "error",
                    "message": "An event was dropped because it exceeded the maximum message size"}
             data = json.dumps(msg).encode("utf-8")
-        with self._write_lock:
-            self.stdout.write(data + b"\n")
-            self.stdout.flush()
+        try:
+            with self._write_lock:
+                self.stdout.write(data + b"\n")
+                self.stdout.flush()
+        except (BrokenPipeError, OSError):  # the host went away: stop work instead of crashing noisily
+            self._cancel.set()
+            self._stop = True
 
     def ok(self, req_id: Any, result: dict[str, Any]) -> None:
         self.send({"type": "response", "id": req_id, "ok": True, "result": result})
 
     def fail(self, req_id: Any, code: str, message: str, details: dict[str, Any] | None = None) -> None:
-        self.send({"type": "response", "id": req_id, "ok": False, "error": {"code": code, "message": message, "details": details or {}}})
+        self.send({"type": "response", "id": req_id, "ok": False, "error": {"code": code, "message": message, "details": details or {}, "hint": hint_for(code)}})
 
     # ---- input ------------------------------------------------------------
     def _read_line(self) -> tuple[bytes | None, bool]:

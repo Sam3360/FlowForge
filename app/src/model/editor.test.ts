@@ -122,3 +122,71 @@ describe("undo / redo and unsaved changes", () => {
     expect(serialize(updateConfig(d, idOf(d, "filter"), "nameContains", "x"))).not.toBe(serialize(d));
   });
 });
+
+describe("duplicate with connections", () => {
+  const wire = (d: Doc, s: string, sp: string, t: string, tp: string) => connect(d, { source: idOf(d, s), sourceHandle: sp, target: idOf(d, t), targetHandle: tp });
+  it("copies connections between duplicated nodes but never to nodes outside the selection", async () => {
+    const { duplicateNodesWithIds } = await import("./editor");
+    let d = build();
+    d = wire(d, "start", "out", "list_files", "in"); d = wire(d, "list_files", "files", "filter", "files"); d = wire(d, "filter", "matched", "move_file", "files");
+    const r = duplicateNodesWithIds(d, [idOf(d, "list_files"), idOf(d, "filter")]);
+    expect(r.newIds).toHaveLength(2);
+    expect(r.doc.edges).toHaveLength(3 + 1);                                  // + the list_files -> filter copy
+    const copyEdge = r.doc.edges.at(-1)!;
+    expect(r.newIds).toContain(copyEdge.source); expect(r.newIds).toContain(copyEdge.target);
+    expect(r.doc.edges.filter((e) => e.target === idOf(d, "move_file"))).toHaveLength(1);   // original input untouched
+    expect(r.doc.edges.filter((e) => r.newIds.includes(e.source) && !r.newIds.includes(e.target))).toHaveLength(0);
+    expect(new Set(r.doc.edges.map((e) => e.id)).size).toBe(r.doc.edges.length);
+  });
+  it("selects the copies, deselects the originals, and preserves configuration", async () => {
+    const { duplicateNodesWithIds } = await import("./editor");
+    let d = build();
+    d = updateConfig(d, idOf(d, "move_file"), "collision", "rename");
+    d = { ...d, nodes: d.nodes.map((n) => ({ ...n, selected: getType(n) === "move_file" })) };
+    const r = duplicateNodesWithIds(d, [idOf(d, "move_file")]);
+    const copy = r.doc.nodes.find((n) => n.id === r.newIds[0])!;
+    expect(copy.data.config["collision"]).toBe("rename");
+    expect(copy.selected).toBe(true);
+    expect(r.doc.nodes.find((n) => n.id === idOf(d, "move_file"))!.selected).toBe(false);
+  });
+  it("duplicating only Start does nothing", async () => {
+    const { duplicateNodesWithIds } = await import("./editor");
+    const d = build();
+    const r = duplicateNodesWithIds(d, [idOf(d, "start")]);
+    expect(r.newIds).toEqual([]); expect(r.doc).toBe(d);
+  });
+});
+
+describe("untrusted workflow files", () => {
+  const file = (nodes: unknown[], edges: unknown[] = []) => JSON.stringify({ schemaVersion: 1, name: "x", nodes, edges });
+  it("resets wrongly-typed settings to defaults and reports it instead of crashing later", () => {
+    const r = parseWorkflowText(file([{ id: "l", type: "list_files", config: { directory: 5, include: "*.pdf", recursive: "yes", maxFiles: -3, bogus: 1 }, position: { x: 1, y: 2 } }]));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.doc.nodes[0]!.data.config).toMatchObject({ directory: null, include: [], recursive: false, maxFiles: -3 });   // right type, out of range: kept, and the engine reports it
+    expect(Array.isArray(r.doc.nodes[0]!.data.config["include"])).toBe(true);
+    expect(r.doc.nodes[0]!.data.config["bogus"]).toBeUndefined();
+    expect(r.warnings.join("\n")).toMatch(/Directory.*reset/);
+    expect(r.warnings.join("\n")).toMatch(/unknown setting "bogus"/);
+  });
+  it("drops connections to missing nodes, unknown ports, and duplicate ids, and says so", () => {
+    const r = parseWorkflowText(file([{ id: "s", type: "start" }, { id: "l", type: "list_files" }], [
+      { id: "e1", source: "s", sourcePort: "out", target: "l", targetPort: "in" },
+      { id: "e1", source: "s", sourcePort: "out", target: "l", targetPort: "in" },
+      { id: "e2", source: "s", sourcePort: "nope", target: "l", targetPort: "in" },
+      { id: "e3", source: "s", sourcePort: "out", target: "ghost", targetPort: "in" }]));
+    expect(r.ok).toBe(true);
+    if (r.ok) { expect(r.doc.edges).toHaveLength(1); expect(r.warnings.join()).toMatch(/3 invalid or duplicate connection/); }
+  });
+  it("tolerates junk entries and non-object configs without throwing", () => {
+    for (const nodes of [[null], [{}], [{ id: 5, type: "start" }], [{ id: "a", type: "start", config: [1, 2] }], [{ id: "a", type: "start", position: "x" }]]) {
+      expect(() => parseWorkflowText(file(nodes as unknown[]))).not.toThrow();
+    }
+  });
+  it("clean files produce no warnings", () => {
+    let d = build();
+    d = connect(d, { source: idOf(d, "start"), sourceHandle: "out", target: idOf(d, "list_files"), targetHandle: "in" });
+    const r = parseWorkflowText(serialize(d));
+    expect(r.ok && r.warnings).toEqual([]);
+  });
+});

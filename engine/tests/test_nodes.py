@@ -38,7 +38,7 @@ def test_list_include_exclude(tree):
 
 def test_list_missing_directory_fails_clearly(tree):
     root, src, _ = tree
-    summary, ev = run_workflow(list_wf(directory=str(src / "nope")), [root])
+    summary, ev = run_workflow(list_wf(directory=str(src / "nope")), [root], preflight_checks=False)
     assert summary["status"] == "failed"
     assert by_event(ev, "node_failed")[0]["error"]["code"] == "PATH_NOT_FOUND"
 
@@ -56,7 +56,7 @@ def test_list_outside_allowed_roots_rejected_in_preflight(tree, tmp_path_factory
 
 def test_list_file_instead_of_directory(tree):
     root, src, _ = tree
-    summary, ev = run_workflow(list_wf(directory=str(src / "a.txt")), [root])
+    summary, ev = run_workflow(list_wf(directory=str(src / "a.txt")), [root], preflight_checks=False)
     assert by_event(ev, "node_failed")[0]["error"]["code"] == "NOT_A_DIRECTORY"
 
 
@@ -324,7 +324,7 @@ def test_fanout_branch_nodes_each_run_once(tree):
 
 def test_failure_aborts_and_skips_remaining(tree):
     root, src, dest = tree
-    summary, ev = run_workflow(list_wf_failing(src), [root])
+    summary, ev = run_workflow(list_wf_failing(src), [root], preflight_checks=False)
     assert summary["status"] == "failed" and summary["failedNode"] == "l"
     assert {e["nodeId"] for e in by_event(ev, "node_skipped")} == {"e"}
     assert ev[-1]["event"] == "run_completed"
@@ -395,3 +395,57 @@ def test_approved_root_may_be_a_folder_to_be_created_if_parent_exists(tree):
     assert validate_roots([str(dest / "new")]) == []
     assert validate_roots([str(dest / "a" / "b")])            # grandparent missing: refused
     assert validate_roots([str(src / "a.txt")])               # an existing file is not a folder
+
+
+# ---- v0.2.0: preflight path checks, hints, and path exposure ----------------------
+def _preflight(raw, roots, **kw):
+    from flowforge_engine.context import RunOptions
+    from flowforge_engine.executor import check_workflow, preflight
+    parsed, issues, cfgs = check_workflow(raw, REG)
+    assert not [i for i in issues if i.severity == "error"], issues
+    return preflight(parsed, cfgs, REG, RunOptions(kw.get("dry", False), [str(r) for r in roots], set(kw.get("approved", ())))), parsed
+
+
+def test_preflight_reports_missing_source_folder_before_running(tree):
+    root, src, _ = tree
+    issues, _ = _preflight(list_wf(directory=str(src / "nope")), [root])
+    assert [(i.code, i.node_id, i.field) for i in issues] == [("PATH_NOT_FOUND", "l", "directory")]
+    assert issues[0].to_dict()["hint"]
+
+
+def test_preflight_reports_file_given_as_source_folder(tree):
+    root, src, _ = tree
+    issues, _ = _preflight(list_wf(directory=str(src / "a.txt")), [root])
+    assert [i.code for i in issues] == ["NOT_A_DIRECTORY"]
+
+
+def test_missing_destination_is_allowed_in_preflight(tree):
+    root, src, dest = tree
+    issues, _ = _preflight(organize(src, dest / "later", dry=True), [root])
+    assert issues == []
+
+
+def test_node_failed_events_carry_an_actionable_hint(tree):
+    root, src, dest = tree
+    (dest / "a.txt").write_text("E")
+    summary, ev = run_workflow(organize(src, dest, dry=False, collision="fail"), [root], approved=["m"])
+    err = by_event(ev, "node_failed")[0]["error"]
+    assert err["code"] == "NAME_COLLISION" and "skip or rename" in err["hint"]
+
+
+def test_error_messages_do_not_expose_full_absolute_paths(tree):
+    root, src, dest = tree
+    summary, ev = run_workflow(list_wf(directory=str(src / "missing")), [root], preflight_checks=False)
+    err = by_event(ev, "node_failed")[0]["error"]
+    assert str(root) not in err["message"] and "missing" in err["message"]
+    issues, _ = _preflight(list_wf(directory=str(src)), [src])  # valid root; now check a path outside it
+    from flowforge_engine.paths import PathPolicy
+    with pytest.raises(Exception) as ei:
+        PathPolicy([str(src)]).resolve(str(dest))
+    assert str(root) not in ei.value.message and "resolved" not in ei.value.details
+
+
+def test_logs_do_not_contain_full_paths(tree):
+    root, src, dest = tree
+    _, ev = run_workflow(organize(src, dest), [root])
+    assert not [e for e in by_event(ev, "log") if str(root) in e["message"]]

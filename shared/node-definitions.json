@@ -51,7 +51,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": "directory"
+          "pathKind": "directory",
+          "mustExist": true
         },
         {
           "name": "recursive",
@@ -64,7 +65,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "include",
@@ -77,7 +79,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "*.pdf",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "exclude",
@@ -90,7 +93,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "*.tmp",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "includeHidden",
@@ -103,7 +107,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "maxFiles",
@@ -116,7 +121,8 @@
           "minimum": 1,
           "maximum": 1000000,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         }
       ],
       "sideEffects": false,
@@ -161,7 +167,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": ".pdf",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "nameContains",
@@ -174,7 +181,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "minSize",
@@ -187,7 +195,8 @@
           "minimum": 0,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "maxSize",
@@ -200,7 +209,8 @@
           "minimum": 0,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         }
       ],
       "sideEffects": false,
@@ -248,7 +258,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "operator",
@@ -268,7 +279,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "value",
@@ -281,7 +293,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         }
       ],
       "sideEffects": false,
@@ -320,7 +333,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": "directory"
+          "pathKind": "directory",
+          "mustExist": false
         },
         {
           "name": "collision",
@@ -337,7 +351,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "createDestination",
@@ -350,7 +365,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         },
         {
           "name": "dryRun",
@@ -363,7 +379,8 @@
           "minimum": null,
           "maximum": null,
           "placeholder": "",
-          "pathKind": null
+          "pathKind": null,
+          "mustExist": false
         }
       ],
       "sideEffects": true,

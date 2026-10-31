@@ -13,7 +13,7 @@ export const PROTOCOL_VERSION = 1;
 export const MAX_LINE_BYTES = 4 * 1024 * 1024;
 
 export class EngineRequestError extends Error {
-  constructor(public code: string, message: string, public details: Record<string, unknown> = {}) { super(message); }
+  constructor(public code: string, message: string, public details: Record<string, unknown> = {}, public hint: string | null = null) { super(message); }
 }
 
 interface Pending { resolve: (v: Record<string, unknown>) => void; reject: (e: Error) => void }
@@ -80,8 +80,8 @@ export class EngineClient {
     this.pending.delete(String(msg["id"]));
     if (msg["ok"]) p.resolve(msg["result"] as Record<string, unknown>);
     else {
-      const err = msg["error"] as { code: string; message: string; details?: Record<string, unknown> };
-      p.reject(new EngineRequestError(err.code, err.message, err.details ?? {}));
+      const err = msg["error"] as { code: string; message: string; details?: Record<string, unknown>; hint?: string | null };
+      p.reject(new EngineRequestError(err.code, err.message, err.details ?? {}, err.hint ?? null));
     }
   }
 

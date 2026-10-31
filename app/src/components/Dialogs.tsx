@@ -1,6 +1,12 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 export function Modal({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    const h = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); onClose(); } };
+    window.addEventListener("keydown", h);
+    return () => { window.removeEventListener("keydown", h); prev?.focus?.(); }; // restore focus to where the user was
+  }, [onClose]);
   return (
     <div className="modal-backdrop" onMouseDown={onClose}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
@@ -24,7 +30,7 @@ export function ConfirmDialog({ spec, onChoose }: { spec: ConfirmSpec; onChoose:
   );
 }
 
-export interface RunPlan { folders: string[]; applyNodeIds: string[] }
+export interface RunPlan { folders: string[]; applyNodeIds: string[]; warnings?: number }
 export function RunDialog({ plan, onRun, onClose }: { plan: RunPlan; onRun: (mode: "preview" | "apply") => void; onClose: () => void }) {
   const [ack, setAck] = useState(false);
   const canApply = plan.applyNodeIds.length > 0;
@@ -32,6 +38,7 @@ export function RunDialog({ plan, onRun, onClose }: { plan: RunPlan; onRun: (mod
     <Modal title="Run workflow" onClose={onClose}>
       <p>This run may read and change files <strong>only inside</strong> these folders:</p>
       {plan.folders.length === 0 ? <p className="muted">No folders are used by this workflow.</p> : <ul className="folders">{plan.folders.map((f) => <li key={f}><code>{f}</code></li>)}</ul>}
+      {(plan.warnings ?? 0) > 0 && <p className="muted">{plan.warnings} warning(s) were found; see the Problems tab. They do not block this run.</p>}
       {canApply ? (
         <div className="warnbox">
           Move File is set to apply changes. <strong>Run a preview first</strong>: it lists every planned move and changes nothing.

@@ -115,3 +115,35 @@ def test_stdout_is_protocol_only_and_shutdown_is_clean(engine):
 def test_exits_on_stdin_eof(engine):
     engine.p.stdin.close()
     assert engine.p.wait(timeout=10) == 0
+
+
+def test_engine_reports_0_2_0_and_errors_carry_hints(engine):
+    assert hello(engine)["result"]["engineVersion"] == "0.2.0"
+    engine.send({"id": 2, "type": "run", "workflow": wf([], []), "options": {}})
+    err = engine.read()["error"]
+    assert err["code"] == "VALIDATION_FAILED" and "hint" in err
+    issue = err["details"]["issues"][0]
+    assert issue["code"] == "START_MISSING" and issue["hint"]
+
+
+def test_validate_with_options_reports_missing_folder_with_node_and_field(engine, tree):
+    root, src, dest = tree
+    engine.send({"id": 1, "type": "validate", "workflow": organize(src / "gone", dest),
+                 "options": {"allowedRoots": [str(root)], "dryRun": True}})
+    r = engine.read()["result"]
+    assert not r["valid"] and [(i["code"], i["nodeId"], i["field"]) for i in r["issues"]] == [("PATH_NOT_FOUND", "l", "directory")]
+
+
+def test_engine_exits_quietly_when_host_pipe_closes(tmp_path):
+    """Host disappears mid-run: the engine must stop, not crash with a traceback on stdout."""
+    import subprocess, sys
+    from pathlib import Path
+    src, dest = tmp_path / "s", tmp_path / "d"; src.mkdir(); dest.mkdir()
+    for i in range(500):
+        (src / f"f{i}.txt").write_text("")
+    p = subprocess.Popen([sys.executable, "-m", "flowforge_engine"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         cwd=str(Path(__file__).resolve().parents[1]))
+    p.stdin.write(json.dumps({"id": 1, "type": "run", "workflow": organize(src, dest), "options": {"allowedRoots": [str(tmp_path)]}}).encode() + b"\n")
+    p.stdin.flush(); p.stdout.close(); p.stdin.close()
+    assert p.wait(timeout=15) == 0
+    p.stderr.close()

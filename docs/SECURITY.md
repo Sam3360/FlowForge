@@ -7,6 +7,7 @@
 - **No overwrite:** moves never replace existing files, even in a race.
 - **No code execution:** no eval/exec/shell; Condition uses a fixed operator set.
 - Directory symlinks (and Windows junctions) are not followed when listing; symlink files are never moved.
+- Error messages, logs and issue details show only the last two components of a path (the full paths the user configured remain visible in the node settings and the preview data). Preview/result data still contains full file paths in memory and in the run history; file contents are never read.
 - Bounded input: 4 MiB protocol lines, workflow size limits, bounded log/event previews, file contents never read.
 - The webview has no shell permission; the sidecar is spawned by Rust only. File commands accept only `.json` paths.
 

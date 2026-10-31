@@ -1,4 +1,5 @@
 import { FolderOpen } from "lucide-react";
+import { hintFor } from "../model/hints";
 import type { ConfigFieldDef, Issue } from "../model/types";
 
 interface Props {
@@ -33,7 +34,7 @@ export function ConfigForm({ fields, config, issues, onChange, onBeginEdit, onBr
             {(f.type === "number" || f.type === "integer") && (
               <input id={id} type="number" value={v === null || v === undefined ? "" : String(v)} min={f.minimum ?? undefined} max={f.maximum ?? undefined}
                      step={f.type === "integer" ? 1 : "any"} onFocus={() => onBeginEdit(f.name)}
-                     onChange={(e) => onChange(f.name, e.target.value === "" ? null : Number(e.target.value))} />
+                     onChange={(e) => { const n = Number(e.target.value); onChange(f.name, e.target.value === "" || Number.isNaN(n) ? null : n); }} />
             )}
             {f.type === "enum" && (
               <select id={id} value={String(v ?? "")} onFocus={() => onBeginEdit(f.name)} onChange={(e) => onChange(f.name, e.target.value)}>
@@ -41,11 +42,11 @@ export function ConfigForm({ fields, config, issues, onChange, onBeginEdit, onBr
               </select>
             )}
             {f.type === "stringList" && (
-              <textarea id={id} rows={3} placeholder={f.placeholder ? `${f.placeholder} (one per line)` : "One per line"} value={((v as string[]) ?? []).join("\n")}
+              <textarea id={id} rows={3} placeholder={f.placeholder ? `${f.placeholder} (one per line)` : "One per line"} value={(Array.isArray(v) ? (v as string[]) : []).join("\n")}
                         onFocus={() => onBeginEdit(f.name)} onChange={(e) => onChange(f.name, e.target.value.split("\n").map((s) => s.trim()).filter(Boolean))} />
             )}
             {f.description && <div className="field__help">{f.description}</div>}
-            {problems.map((p, i) => <div key={i} className="field__error" role="alert">{p.message}</div>)}
+            {problems.map((p, i) => <div key={i} className={p.severity === "error" ? "field__error" : "field__warn"} role="alert">{p.message}{hintFor(p) ? <span className="muted"> {hintFor(p)}</span> : null}</div>)}
           </div>
         );
       })}

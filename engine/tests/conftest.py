@@ -39,7 +39,7 @@ def organize(src, dest, ext=".txt", dry=True, collision="fail", create=False):
          edge("f", "matched", "m", "files"), edge("m", "moved", "e", "in")])
 
 
-def run_workflow(raw, roots, dry_run=False, approved=(), cancel=None, on_event=None):
+def run_workflow(raw, roots, dry_run=False, approved=(), cancel=None, on_event=None, preflight_checks=True):
     events: list[dict] = []
 
     def emit(e):
@@ -48,7 +48,7 @@ def run_workflow(raw, roots, dry_run=False, approved=(), cancel=None, on_event=N
             on_event(e)
 
     parsed, issues, configs = check_workflow(raw, REG)
-    if parsed is not None and not has_errors(issues):
+    if preflight_checks and parsed is not None and not has_errors(issues):
         issues += preflight(parsed, configs, REG, RunOptions(dry_run, [str(r) for r in roots], set(approved)))
     assert not has_errors(issues), [i.to_dict() for i in issues]
     run = Run(parsed, configs, REG, RunOptions(dry_run, [str(r) for r in roots], set(approved)), emit, cancel or threading.Event())

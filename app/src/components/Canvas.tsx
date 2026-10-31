@@ -11,11 +11,12 @@ import { FlowNode } from "./FlowNode";
 import { DRAG_MIME } from "./NodeLibrary";
 import { useOverlay } from "./RunContext";
 
-export interface CanvasHandle { getViewport(): Viewport; fit(): void; center(): { x: number; y: number } }
+export interface CanvasHandle { getViewport(): Viewport; fit(): void; center(): { x: number; y: number }; focus(id: string): void }
 interface Props {
   doc: Doc; showMiniMap: boolean; initialViewport?: Viewport;
   onSet: (d: Doc) => void; onCheckpoint: () => void; onAddAt: (type: string, pos: { x: number; y: number }) => void;
   onDuplicate: (ids: string[]) => void; onSelect: (ids: string[]) => void; onRejected: (reason: string) => void;
+  onDeleted: (count: number) => void; onExample: () => void; onAddStart: () => void;
 }
 const nodeTypes = { forge: FlowNode };
 
@@ -26,6 +27,7 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(p, ref)
   useImperativeHandle(ref, () => ({
     getViewport: () => rf.getViewport(), fit: () => void rf.fitView({ padding: 0.2, duration: 200 }),
     center: () => rf.screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 }),
+    focus: (id: string) => void rf.fitView({ nodes: [{ id }], duration: 250, maxZoom: 1.1, padding: 0.8 }),
   }), [rf]);
 
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -60,7 +62,7 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(p, ref)
   return (
     <div className="canvas" onDragOver={(e) => { if (e.dataTransfer.types.includes(DRAG_MIME)) { e.preventDefault(); e.dataTransfer.dropEffect = "copy"; } }} onDrop={onDrop} onClick={() => setMenu(null)}>
       <ReactFlow nodes={p.doc.nodes as never} edges={edges} nodeTypes={nodeTypes} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-        onNodeDragStart={p.onCheckpoint} defaultViewport={p.initialViewport} fitView={!p.initialViewport} fitViewOptions={{ padding: 0.2 }}
+        onNodeDragStart={p.onCheckpoint} onNodesDelete={(ns) => p.onDeleted(ns.length)} defaultViewport={p.initialViewport} fitView={!p.initialViewport} fitViewOptions={{ padding: 0.2 }}
         connectionLineType={ConnectionLineType.Bezier} minZoom={0.2} maxZoom={1.8} deleteKeyCode={["Delete", "Backspace"]} multiSelectionKeyCode="Shift"
         selectionOnDrag panOnDrag={[1, 2]} proOptions={{ hideAttribution: true }}
         isValidConnection={(c) => !!c.sourceHandle && !!c.targetHandle && connectionProblem(p.doc, { source: c.source, sourceHandle: c.sourceHandle, target: c.target, targetHandle: c.targetHandle }) === null}
@@ -89,16 +91,25 @@ const CanvasInner = forwardRef<CanvasHandle, Props>(function CanvasInner(p, ref)
       </ReactFlow>
       <button className="btn fitbtn" onClick={() => void rf.fitView({ padding: 0.2, duration: 200 })} title="Fit to screen"><Maximize size={14} /> Fit</button>
       {empty && (
-        <div className="canvas__empty"><h2>Build your first workflow</h2>
-          <p>Drag <b>Start</b> from the library onto the canvas, then add nodes and connect output ports (right) to input ports (left).</p>
-          <p className="muted">Tip: right-click the canvas to add a node, or open the Organize Downloads example from the settings menu.</p></div>
+        <div className="canvas__empty" data-testid="empty-canvas"><h2>Build your first workflow</h2>
+          <ol>
+            <li>Add a <b>Start</b> node, then the nodes you need from the library (drag, or double-click).</li>
+            <li>Connect an output port (right side) to an input port (left side).</li>
+            <li>Fill in each node's settings in the Inspector, then press <b>Validate</b>.</li>
+            <li><b>Run</b> a preview first: it shows what would happen and changes nothing.</li>
+          </ol>
+          <div className="row row--center">
+            <button className="btn btn--primary" onClick={p.onAddStart}>Add a Start node</button>
+            <button className="btn" onClick={p.onExample}>Open the example workflow</button>
+          </div>
+          <p className="muted">Tip: right-click the canvas to add a node.</p></div>
       )}
       {menu && (
         <div className="ctxmenu" style={{ left: menu.x, top: menu.y }} role="menu" onClick={(e) => e.stopPropagation()}>
           {menu.nodeId ? (
             <>
               <button role="menuitem" onClick={() => { p.onDuplicate([menu.nodeId!]); setMenu(null); }}><Copy size={13} /> Duplicate</button>
-              <button role="menuitem" onClick={() => { p.onCheckpoint(); p.onSet(deleteNodes(p.doc, [menu.nodeId!])); setMenu(null); }}><Trash2 size={13} /> Delete node</button>
+              <button role="menuitem" onClick={() => { p.onCheckpoint(); p.onSet(deleteNodes(p.doc, [menu.nodeId!])); p.onDeleted(1); setMenu(null); }}><Trash2 size={13} /> Delete node</button>
             </>
           ) : (
             <><div className="ctxmenu__title">Add node</div>
