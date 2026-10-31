@@ -1,63 +1,138 @@
-# FlowForge (working name)
+# FlowForge
 
-A local-first visual automation builder for Windows. Drag nodes onto a canvas, connect them, and run the workflow on your own machine: no account, no server, no internet. The name is configurable (`VITE_PRODUCT_NAME`, `productName` in `app/src-tauri/tauri.conf.json`).
+**Build visual file automation workflows without writing scripts.**
 
-**Stack:** Tauri 2 + React + strict TypeScript + Vite + React Flow; Python execution engine shipped as a PyInstaller sidecar; NDJSON over stdin/stdout.
+FlowForge is a local-first desktop application that lets you create and run file automation workflows using a visual node-based editor.
 
-## Status (v0.2.0)
+Connect nodes, configure their settings, and execute workflows through a simple interface. No cloud account or external automation service required.
 
-v0.1.0 shipped a working Windows installer. v0.2.0 is a debugging/usability release; see `CHANGELOG.md`.
+[**Download for Windows**](https://github.com/Sam3360/FlowForge/releases/tag/v0.2.0) · [Report a Bug](https://github.com/Sam3360/FlowForge/issues) · [Changelog](CHANGELOG.md)
 
-| Area | State |
-|---|---|
-| Python engine, 6 nodes, protocol | 88 tests passing on Linux (1 skipped when run as root) |
-| React editor, inspector, panels | 59 tests pass (jsdom, incl. real-engine integration and a multi-run App flow) |
-| Linux sidecar build + smoke test | Run and passing (proves the packaging script, **not** the Windows build) |
-| Windows sidecar `.exe` and NSIS installer for 0.2.0 | **Not built by this change.** Build locally on Windows (`docs/RELEASE.md`) |
-| CI | Linux only. **No Windows runners are used**; the installer is built manually |
-| Visual check of the UI in a real WebView | Not done in the dev environment (jsdom only) |
+---
 
-## What's new in 0.2.0
+## Features
 
-- **Run history** (bottom panel, *History* tab): finished runs of this session with result, start time, duration, the node that failed and its error. Click a run to inspect it; the canvas and Inspector then show *that* run and a banner offers *Back to live*. In memory only.
-- **Problems panel** (*Problems* tab): validation errors (block the run) and warnings (do not), each with a "what to check" hint. Click an item to jump to the node. Validation is performed by the engine, including folder existence and approved-folder checks.
-- **Clearer node feedback**: pending / running / completed / failed / skipped / cancelled states, a failure summary ("Failed at *Move File*... What to check...") with *Go to node*, and honest cancellation messages.
-- **Editing**: duplicate keeps settings and re-creates connections *between* duplicated nodes only; multi-select duplicate/delete in the Inspector; delete shows an *Undo* toast (and asks first for 5+ nodes); selection survives undo/redo; first-run guidance on the empty canvas.
-- **Reliability**: engine errors carry codes and hints; duplicate / out-of-order / stale engine events are ignored; malformed or hand-edited workflow files are sanitized with a report instead of crashing the editor; error messages no longer print full absolute paths.
+- **Visual workflow editor** – Build workflows by connecting nodes on a canvas.
+- **Node library** – Use different operations to create file automation workflows.
+- **Preview and Apply** – Preview operations before applying changes.
+- **Workflow validation** – Detect configuration problems before execution.
+- **Run history** – Inspect previous runs and return to the current workflow.
+- **Execution logs** – Follow what happens while a workflow runs.
+- **Failure information** – Get readable errors and hints when something goes wrong.
+- **Undo and redo** – Recover from editing mistakes.
+- **Local-first** – Workflows and file operations run locally on your computer.
 
-## Quick start (Linux/WSL/macOS dev, no Rust needed)
+## Screenshots
 
-```bash
-cd engine && python -m pip install -e ".[dev]" && python -m pytest      # engine tests
-cd ../app && npm ci && npm run typecheck && npm test                      # frontend tests (spawns the real engine; needs python3 on PATH, or FLOWFORGE_PYTHON)
-python scripts/make_demo.py                                               # throw-away demo folder + ready-to-run workflow (from repo root)
+<!-- Add application screenshots here -->
+
+## Installation
+
+FlowForge currently provides a Windows x64 installer.
+
+1. Visit the [Releases page](https://github.com/Sam3360/FlowForge/releases).
+2. Download `FlowForge_0.2.0_x64-setup.exe`.
+3. Run the installer and follow the instructions.
+4. Launch FlowForge.
+
+The packaged application includes its engine. You do not need to install Python, Node.js, or Rust separately.
+
+## How it works
+
+FlowForge has two main parts:
+
+- **Desktop application:** A Tauri-based application built with React and TypeScript.
+- **Engine:** A Python-based execution engine that processes workflows and communicates with the desktop application.
+
+The engine runs locally, and communication between the application and engine uses a structured protocol.
+
+## Development
+
+### Requirements
+
+- Python 3.10+
+- Node.js 20+
+- Rust with the MSVC toolchain
+- Microsoft C++ Build Tools
+- WebView2
+
+### Engine
+
+```powershell
+cd engine
+python -m pip install -e ".[dev]"
+python -m pytest
 ```
 
-## Running the desktop app (needs Rust + platform Tauri prerequisites)
+### Frontend
 
-```bash
-cd engine && python build_sidecar.py        # builds the sidecar for THIS OS into app/src-tauri/binaries/
-cd ../app && npm ci && npx tauri dev
+```powershell
+cd app
+npm ci
+npm run typecheck
+npm test
+npm run build
 ```
 
-## Windows installer
+### Build the Windows installer
 
-Built **manually on a Windows PC** (PyInstaller does not cross-compile; CI deliberately has no Windows job). Exact commands: `docs/RELEASE.md`. Output: `app\src-tauri\target\release\bundle\nsis\FlowForge_0.2.0_x64-setup.exe` (unsigned).
+Build the Windows engine sidecar first:
 
-## Using it
+```powershell
+cd engine
+python build_sidecar.py
+python smoke_sidecar.py ..\app\src-tauri\binaries\flowforge-engine-x86_64-pc-windows-msvc.exe
+```
 
-1. Settings menu -> **Open "Organize Downloads" example** (or build your own).
-2. Pick the folders in **List Files** and **Move File** (Inspector -> Browse).
-3. **Validate** (see the *Problems* tab), then **Run**. The dialog lists the only folders the run may touch. By default Move File is a *preview*: nothing changes, and the Execution panel / Inspector show every planned move.
-4. To really move files, turn off "Preview only" in Move File, Run, tick the acknowledgement, and choose **Run and apply changes**.
-5. Select any node (canvas or Execution panel) -> Inspector **Execution** tab for status, duration, inputs, outputs, errors, branch taken. Use the *History* tab to look back at earlier runs.
+Then build the desktop application:
 
-## Docs
+```powershell
+cd ..\app
+$env:FLOWFORGE_PYTHON = "python"
+npm ci
+npx tauri build
+```
 
-- `docs/ARCHITECTURE.md` - layout and design decisions
-- `docs/WORKFLOW_FORMAT.md` - versioned JSON schema (v1)
-- `docs/PROTOCOL.md` - NDJSON protocol and events
-- `docs/NODES.md` - node reference and **how to add a node**
-- `docs/SECURITY.md` - permission model and limits
-- `docs/RELEASE.md` - build, release checklist
-- `docs/LIMITATIONS.md`, `CHANGELOG.md`
+The installer is generated at:
+
+```text
+app/src-tauri/target/release/bundle/nsis/
+```
+
+See [docs/RELEASE.md](docs/RELEASE.md) for the complete release process.
+
+## Project structure
+
+```text
+FlowForge/
+├── app/          # Tauri + React desktop application
+├── engine/       # Python workflow engine
+├── shared/       # Shared node definitions
+├── docs/         # Documentation
+└── .github/      # GitHub Actions workflows
+```
+
+## CI
+
+GitHub Actions runs the automated engine and frontend checks on Linux.
+
+Windows sidecar and installer builds are performed manually on a Windows PC.
+
+## Security and privacy
+
+- Workflow execution happens locally.
+- No cloud execution service is required.
+- Run history is kept in memory for the current application session.
+- See [SECURITY.md](docs/SECURITY.md) for security-related information.
+
+## Current release
+
+**Version:** 0.2.0
+
+**Platform:** Windows x64
+
+See the [v0.2.0 changelog](CHANGELOG.md) and [GitHub Releases](https://github.com/Sam3360/FlowForge/releases).
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
